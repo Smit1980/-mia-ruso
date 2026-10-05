@@ -1,0 +1,76 @@
+name: Build and verify mobile lessons
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/assets/**'
+      - 'docs/index.html'
+      - 'docs/.nojekyll'
+      - 'docs/pages-verification.json'
+      - 'docs/screenshots/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: mobile-lessons-main
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify application and private board API
+        run: |
+          npm run build
+          npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify private board in two browser sessions
+        run: node tests/browser.mjs
+      - name: Build public mobile lessons
+        run: |
+          rm -rf docs/assets
+          npm run build:pages
+      - name: Verify six lessons and phone layouts
+        run: node tests/pages.mjs
+      - name: Save checked website
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/assets
+          git add docs/index.html docs/.nojekyll docs/pages-verification.json docs/screenshots/pages-mobile.png
+          if ! git diff --cached --quiet; then
+            git commit -m "build: publish verified mobile lessons [skip ci]"
+            git push origin HEAD:main
+          fi
+      - name: Enable or rebuild GitHub Pages
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/$GITHUB_REPOSITORY/pages" --jq '.html_url'; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/pages" -f 'source[branch]=main' -f 'source[path]=/docs'
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Upload checked website and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mia-mobile-lessons
+          path: |
+            docs/index.html
+            docs/assets/
+            docs/.nojekyll
+            docs/pages-verification.json
+            docs/screenshots/
+          include-hidden-files: true
