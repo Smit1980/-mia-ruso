@@ -1,4 +1,6 @@
+declare const __STATIC_SITE__: boolean;
 import Reveal from "reveal.js";
+import { guides } from "./lesson-guides";
 import "reveal.js/dist/reveal.css";
 import "./style.css";
 import { lessons, cards, type Lesson } from "./course";
@@ -10,6 +12,12 @@ let role = "mia",
   deck: Reveal.Api | undefined;
 const icons = { home: "⌂", learn: "▤", review: "✦", board: "♡", settings: "⚙" };
 async function boot() {
+  if (__STATIC_SITE__) {
+    role = "mia";
+    layout();
+    navigate("home");
+    return;
+  }
   try {
     const me = await api("me");
     role = me.role;
@@ -41,6 +49,7 @@ function layout() {
     e.preventDefault();
     navigate("home");
   });
+  if (__STATIC_SITE__) app.querySelector<HTMLElement>("#logout")!.hidden = true;
   app.querySelector("#logout")!.addEventListener("click", async () => {
     try {
       await api("logout", {});
@@ -65,8 +74,15 @@ function navigate(page: string) {
   if (page === "home") home();
   else if (page === "learn") learn();
   else if (page === "review") review();
-  else if (page === "board") void renderBoard(content(), role);
+  else if (page === "board") {
+    if (__STATIC_SITE__) staticBoard();
+    else void renderBoard(content(), role);
+  }
   else settings();
+}
+function staticBoard() {
+  content().innerHTML = `<div class="page-heading"><div><span class="eyebrow">DE TU MUNDO AL MÍO</span><h1>Nuestro tablón ♡</h1><p>La conversación con tu familia estará aquí.</p></div></div><section class="panel"><h2>La correspondencia todavía no está disponible</h2><p>En esta versión puedes aprender y practicar. Para enviar mensajes y recibir respuestas necesitamos activar el espacio privado de tu familia.</p><p>Mientras tanto, prepara un saludo en una nota y compártelo con tu familia:</p><blockquote lang="ru">Приве́т! Меня́ зову́т Ми́я. Я учу́ ру́сский.</blockquote><p class="small">¡Hola! Me llamo Mía. Estoy aprendiendo ruso.</p><button class="primary" id="board-learn">Seguir aprendiendo →</button></section>`;
+  content().querySelector("#board-learn")!.addEventListener("click", () => navigate("learn"));
 }
 function lessonCards() {
   return lessons
@@ -105,6 +121,7 @@ function learn() {
   bindLessons();
 }
 async function lesson(l: Lesson) {
+  const guide = guides[l.id];
   if (deck) {
     deck.destroy();
     deck = undefined;
@@ -122,7 +139,7 @@ async function lesson(l: Lesson) {
         .join("")}</section>`,
   ).join(
     "",
-  )}<section><h2>¡Tu turno! ✦</h2><p>Ya conoces ${l.words.length} palabras nuevas.<br>Vamos a practicar un poquito.</p></section></div></div></div><div class="lesson-actions"><button id="prev" class="secondary">← Anterior</button><span id="slide-position" aria-live="polite"></span><button id="next" class="primary">Siguiente →</button></div><div class="panel" id="quiz"><span class="eyebrow">PRACTICA SIN PRISA</span><h2>Una palabra a la vez</h2><p>Recorre los slides y después prueba estas preguntas.</p><button id="start-quiz" class="primary">Practicar esta lección ✦</button></div>`;
+  )}<section><h2>¡Tu turno! ✦</h2><p>Ya conoces ${l.words.length} palabras nuevas.<br>Vamos a practicar un poquito.</p></section></div></div></div><div class="lesson-actions"><button id="prev" class="secondary">← Anterior</button><span id="slide-position" aria-live="polite"></span><button id="next" class="primary">Siguiente →</button></div><section class="lesson-reading panel"><span class="eyebrow">LO QUE VAS A APRENDER</span><h2>Tu meta de hoy</h2><p>${escape(guide.goal)}</p><div class="reading-steps">${guide.sections.map(section=>`<article><h3>${escape(section.title)}</h3><p>${escape(section.text)}</p></article>`).join("")}</div><div class="mini-dialogue"><span class="eyebrow">UN PEQUEÑO DIÁLOGO</span><h3>Lee y prueba</h3>${guide.dialogue.map(([speaker,ru,es])=>`<div class="dialogue-line"><strong>${escape(speaker)}</strong><p lang="ru">${escape(ru)}</p><span>${escape(es)}</span></div>`).join("")}</div><div class="lesson-mission"><span class="eyebrow">TU PEQUEÑA MISIÓN</span><h3>Usa tus nuevas palabras</h3><p>${escape(guide.task)}</p><details><summary>Ver un ejemplo</summary><p lang="ru">${escape(guide.example)}</p><p>${escape(guide.translation)}</p></details></div></section><div class="panel" id="quiz"><span class="eyebrow">PRACTICA SIN PRISA</span><h2>Una palabra a la vez</h2><p>Recorre los slides y después prueba estas preguntas.</p><button id="start-quiz" class="primary">Practicar esta lección ✦</button></div>`;
   content()
     .querySelector("#back")!
     .addEventListener("click", () => navigate("learn"));
@@ -132,8 +149,8 @@ async function lesson(l: Lesson) {
     controls: false,
     progress: true,
     center: true,
-    width: 900,
-    height: 500,
+    width: Math.min(900, Math.max(280, content().querySelector<HTMLElement>(".slide-shell")!.clientWidth)),
+    height: window.innerWidth < 760 ? 600 : 500,
     transition: "fade",
     keyboardCondition: "focused",
   });
@@ -302,7 +319,7 @@ function review() {
   draw();
 }
 function settings() {
-  content().innerHTML = `<div class="page-heading"><div><span class="eyebrow">TU CAMINO, GUARDADO</span><h1>Mi progreso</h1><p>Se guarda en este navegador. Lleva una copia a otro dispositivo.</p></div></div><section class="panel"><h2>Una copia de tus palabras</h2><p>Guarda un archivo de progreso para conservar tus lecciones y tarjetas. Los mensajes del tablón se guardan por separado en el servidor.</p><button id="export" class="primary">Descargar mi progreso ↓</button><label class="file-label">Importar una copia<input id="import" type="file" accept="application/json,.json"></label><p id="import-status" role="status"></p></section><section class="panel"><h2>Lo que ya has aprendido</h2><p>${progress.completed.length} lecciones completadas · ${Object.keys(progress.reviews).length} tarjetas practicadas · ${cards.length} tarjetas disponibles.</p><p class="small">Si borras los datos del navegador, perderás este progreso sin una copia. Los audios y la dictación llegarán en una siguiente etapa.</p></section>`;
+  content().innerHTML = `<div class="page-heading"><div><span class="eyebrow">TU CAMINO, GUARDADO</span><h1>Mi progreso</h1><p>Se guarda en este navegador. Lleva una copia a otro dispositivo.</p></div></div><section class="panel"><h2>Una copia de tus palabras</h2><p>Guarda un archivo de progreso para conservar tus lecciones y tarjetas. ${__STATIC_SITE__ ? "La correspondencia aún no está disponible en esta versión." : "Los mensajes del tablón se guardan por separado en el servidor."}</p><button id="export" class="primary">Descargar mi progreso ↓</button><label class="file-label">Importar una copia<input id="import" type="file" accept="application/json,.json"></label><p id="import-status" role="status"></p></section><section class="panel"><h2>Lo que ya has aprendido</h2><p>${progress.completed.length} lecciones completadas · ${Object.keys(progress.reviews).length} tarjetas practicadas · ${cards.length} tarjetas disponibles.</p><p class="small">Si borras los datos del navegador, perderás este progreso sin una copia. Los audios y la dictación llegarán en una siguiente etapa.</p></section>`;
   content()
     .querySelector("#export")!
     .addEventListener("click", () => {
