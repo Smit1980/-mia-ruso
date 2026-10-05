@@ -1,0 +1,25 @@
+{
+  "checked_at": "2026-10-05T16:41:21.250Z",
+  "status": "passed",
+  "lessons": 6,
+  "cards": 40,
+  "widths": [
+    320,
+    375,
+    390,
+    768,
+    1366
+  ],
+  "checks": [
+    "six complete lessons",
+    "mobile layout",
+    "slides",
+    "quiz",
+    "Cyrillic keyboard",
+    "persistent progress",
+    "FSRS",
+    "no backend requests",
+    "no page or asset errors"
+  ],
+  "live_site_checked": false
+}
